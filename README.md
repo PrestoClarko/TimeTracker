@@ -83,28 +83,44 @@ sign-in and cloud sync, configure Firebase below.
 
 ---
 
-## 🌐 Deploy free on Cloudflare Pages
+## 🌐 Deploy free on Cloudflare
+
+This repo ships a [`wrangler.jsonc`](./wrangler.jsonc) that serves `dist/` as
+static assets with single-page-application fallback, so it deploys cleanly to
+**Cloudflare Workers** (the modern static-assets pipeline).
+
+### Option A — Connect to Git (recommended)
 
 1. Push this repo to GitHub (already done if you're reading this there).
 2. In the [Cloudflare dashboard](https://dash.cloudflare.com/) →
-   **Workers & Pages** → **Create** → **Pages** → **Connect to Git** → pick this repo.
+   **Workers & Pages** → **Create** → **Import a repository** → pick this repo.
 3. Build settings:
-   - **Framework preset:** `Vite` (or `None`)
    - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-4. Add your `VITE_FIREBASE_*` values under **Settings → Environment variables**
-   (Production *and* Preview).
-5. **Deploy.** You'll get a free `*.pages.dev` URL.
+   - **Deploy command:** `npx wrangler deploy`
+   - (Output is `./dist`, already declared in `wrangler.jsonc`.)
+4. Add your `VITE_FIREBASE_*` values as **build environment variables**.
+   > These are baked into the bundle at build time, so they must be present
+   > when `npm run build` runs.
+5. **Deploy.** You'll get a free `*.workers.dev` URL.
 6. **Authorize the domain in Firebase**: Authentication → Settings →
-   **Authorized domains** → add your `your-app.pages.dev` (and any custom
-   domain). Google sign-in popups only work from authorized domains.
+   **Authorized domains** → add your deployed domain (and any custom domain).
+   Google sign-in popups only work from authorized domains.
 
-The included [`public/_redirects`](./public/_redirects) file makes client-side
-routing / refreshes work on Pages.
+### Option B — Deploy from your machine
 
-> Prefer all-Cloudflare? You can also deploy with Wrangler:
-> `npx wrangler pages deploy dist`. Hosting on Netlify, Vercel, Firebase
-> Hosting, or GitHub Pages works identically — it's a static bundle in `dist/`.
+```bash
+npm run deploy   # runs `npm run build` then `wrangler deploy`
+```
+
+> **Why not a `_redirects` file?** The Workers asset pipeline rejects the
+> classic SPA catch-all (`/* /index.html 200`) as an infinite-loop risk.
+> Instead, SPA fallback is configured via `"not_found_handling":
+> "single-page-application"` in `wrangler.jsonc`. (This app uses state-driven
+> views on a single route, so a hard refresh always lands correctly anyway.)
+>
+> Prefer classic **Pages**, Netlify, Vercel, Firebase Hosting, or GitHub Pages?
+> It's just a static bundle in `dist/` — point any of them at `npm run build`
+> with output dir `dist`.
 
 ---
 
