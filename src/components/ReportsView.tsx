@@ -84,9 +84,11 @@ export function ReportsView({
     range.start,
     new Date(range.end.getTime() - 1),
   );
-  const avgPerDay = (() => {
-    const days = Math.round((range.end.getTime() - range.start.getTime()) / 86400000);
-    return days > 0 ? agg.totalMinutes / days : 0;
+  // Average across days that actually have logged time (more useful than
+  // dividing by every calendar day in the period).
+  const avgPerActiveDay = (() => {
+    const activeDays = new Set(periodEntries.map((e) => e.date)).size;
+    return activeDays > 0 ? agg.totalMinutes / activeDays : 0;
   })();
 
   return (
@@ -162,9 +164,9 @@ export function ReportsView({
           accent="amber"
         />
         <StatCard
-          label="Avg / day"
-          value={formatDuration(avgPerDay)}
-          sub="Across the period"
+          label="Avg / active day"
+          value={formatDuration(avgPerActiveDay)}
+          sub="Days with logged time"
           accent="sky"
         />
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import type { TimerApi } from "../hooks/useTimer";
 import { Button } from "./ui";
@@ -41,6 +41,19 @@ export function TopBar({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [taskInput, setTaskInput] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close the account menu when clicking anywhere outside it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [menuOpen]);
 
   return (
     <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950/80 px-4 py-3 backdrop-blur sm:px-6">
@@ -113,7 +126,7 @@ export function TopBar({
         </div>
 
         {user ? (
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((o) => !o)}
               className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 py-1 pl-1 pr-3 hover:bg-slate-700"
@@ -135,10 +148,7 @@ export function TopBar({
               </span>
             </button>
             {menuOpen && (
-              <div
-                className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl"
-                onMouseLeave={() => setMenuOpen(false)}
-              >
+              <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl">
                 <div className="border-b border-slate-800 px-4 py-3">
                   <div className="truncate text-sm font-medium text-white">
                     {user.displayName}

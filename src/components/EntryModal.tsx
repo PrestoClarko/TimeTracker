@@ -97,10 +97,26 @@ export function EntryModal({
       const s = timeToMinutes(start);
       const e = timeToMinutes(end);
       if (s == null || e == null) return 0;
-      return Math.max(0, e - s);
+      // Support overnight ranges (e.g. 23:00 → 01:00).
+      return e >= s ? e - s : 24 * 60 - s + e;
     }
     return hours * 60 + mins;
   }, [mode, hours, mins, start, end]);
+
+  // Close on Escape and lock background scroll while the modal is open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -198,6 +214,7 @@ export function EntryModal({
 
           <Field label="Task / Summary">
             <input
+              autoFocus
               value={task}
               onChange={(e) => setTask(e.target.value)}
               placeholder="Configured firewall rules for new VLAN"
@@ -250,6 +267,7 @@ export function EntryModal({
                     type="number"
                     min={0}
                     value={hours}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setHours(Math.max(0, +e.target.value))}
                     className={inputClass}
                   />
@@ -260,6 +278,7 @@ export function EntryModal({
                     min={0}
                     max={59}
                     value={mins}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) =>
                       setMins(Math.min(59, Math.max(0, +e.target.value)))
                     }
@@ -303,6 +322,7 @@ export function EntryModal({
                 type="number"
                 min={0}
                 value={rate}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setRate(Math.max(0, +e.target.value))}
                 className={inputClass}
               />
