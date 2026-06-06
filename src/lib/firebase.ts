@@ -1,6 +1,9 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  type Firestore,
+} from "firebase/firestore";
 
 // Firebase config is read from Vite env vars (VITE_FIREBASE_*).
 // These are *public* client keys — safe to expose in a frontend bundle.
@@ -26,7 +29,11 @@ let dbInstance: Firestore | null = null;
 if (firebaseEnabled) {
   app = initializeApp(firebaseConfig);
   authInstance = getAuth(app);
-  dbInstance = getFirestore(app);
+  // ignoreUndefinedProperties lets us write entries that omit optional fields
+  // (e.g. an empty ticket #) instead of throwing on `undefined` values.
+  dbInstance = initializeFirestore(app, {
+    ignoreUndefinedProperties: true,
+  });
 }
 
 export const auth = authInstance;

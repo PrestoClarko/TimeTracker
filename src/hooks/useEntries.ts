@@ -19,6 +19,8 @@ export interface EntriesApi {
   loading: boolean;
   syncing: boolean;
   source: "cloud" | "local";
+  error: string | null;
+  clearError: () => void;
   addEntry: (draft: EntryDraft) => Promise<void>;
   updateEntry: (id: string, draft: EntryDraft) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
@@ -29,12 +31,24 @@ function entriesCollection(uid: string) {
   return collection(db, "users", uid, "entries");
 }
 
+/** Drop keys whose value is `undefined` so Firestore writes never throw. */
+function clean<T extends object>(obj: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as T;
+}
+
 export function useEntries(user: User | null): EntriesApi {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const cloud = Boolean(firebaseEnabled && user && db);
   const migratedRef = useRef(false);
+
+  const clearError = useCallback(() => setError(null), []);
 
   // ---- Local-only mode ----
   useEffect(() => {
@@ -55,12 +69,22 @@ export function useEntries(user: User | null): EntriesApi {
       setSyncing(true);
       const batch = writeBatch(db!);
       for (const e of local) {
-        batch.set(doc(entriesCollection(user.uid), e.id), e, { merge: true });
+        batch.set(doc(entriesCollection(user.uid), e.id), clean(e), {
+          merge: true,
+        });
       }
       batch
         .commit()
         .then(() => saveLocalEntries([]))
-        .catch(() => {})
+        .catch((e) => {
+          // Migration failed (e.g. rules not set) — keep the local copy.
+          migratedRef.current = false;
+          setError(
+            `Couldn't sync local entries to the cloud. ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        })
         .finally(() => setSyncing(false));
     }
 
@@ -71,7 +95,12 @@ export function useEntries(user: User | null): EntriesApi {
         setEntries(list);
         setLoading(false);
       },
-      () => setLoading(false),
+      (e) => {
+        setLoading(false);
+        setError(
+          `Couldn't load your cloud entries. Check that Firestore is enabled and the security rules are published. ${e.message}`,
+        );
+      },
     );
     return unsub;
   }, [cloud, user]);
@@ -79,6 +108,14 @@ export function useEntries(user: User | null): EntriesApi {
   const persistLocal = useCallback((next: TimeEntry[]) => {
     setEntries(next);
     saveLocalEntries(next);
+  }, []);
+
+  const reportError = useCallback((e: unknown, action: string) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    setError(`Couldn't ${action}. ${msg}`);
+    setSyncing(false);
+    // eslint-disable-next-line no-console
+    console.error(`Failed to ${action}:`, e);
   }, []);
 
   const addEntry = useCallback(
@@ -91,14 +128,18 @@ export function useEntries(user: User | null): EntriesApi {
         updatedAt: now,
       };
       if (cloud && user) {
-        setSyncing(true);
-        await setDoc(doc(entriesCollection(user.uid), entry.id), entry);
-        setSyncing(false);
+        try {
+          setSyncing(true);
+          await setDoc(doc(entriesCollection(user.uid), entry.id), clean(entry));
+          setSyncing(false);
+        } catch (e) {
+          reportError(e, "save entry");
+        }
       } else {
         persistLocal([entry, ...entries]);
       }
     },
-    [cloud, user, entries, persistLocal],
+    [cloud, user, entries, persistLocal, reportError],
   );
 
   const updateEntry = useCallback(
@@ -111,9 +152,13 @@ export function useEntries(user: User | null): EntriesApi {
           createdAt: existing?.createdAt ?? Date.now(),
           updatedAt: Date.now(),
         };
-        setSyncing(true);
-        await setDoc(doc(entriesCollection(user.uid), id), merged);
-        setSyncing(false);
+        try {
+          setSyncing(true);
+          await setDoc(doc(entriesCollection(user.uid), id), clean(merged));
+          setSyncing(false);
+        } catch (e) {
+          reportError(e, "update entry");
+        }
       } else {
         persistLocal(
           entries.map((e) =>
@@ -122,20 +167,24 @@ export function useEntries(user: User | null): EntriesApi {
         );
       }
     },
-    [cloud, user, entries, persistLocal],
+    [cloud, user, entries, persistLocal, reportError],
   );
 
   const deleteEntry = useCallback(
     async (id: string) => {
       if (cloud && user) {
-        setSyncing(true);
-        await deleteDoc(doc(entriesCollection(user.uid), id));
-        setSyncing(false);
+        try {
+          setSyncing(true);
+          await deleteDoc(doc(entriesCollection(user.uid), id));
+          setSyncing(false);
+        } catch (e) {
+          reportError(e, "delete entry");
+        }
       } else {
         persistLocal(entries.filter((e) => e.id !== id));
       }
     },
-    [cloud, user, entries, persistLocal],
+    [cloud, user, entries, persistLocal, reportError],
   );
 
   return {
@@ -143,6 +192,8 @@ export function useEntries(user: User | null): EntriesApi {
     loading,
     syncing,
     source: cloud ? "cloud" : "local",
+    error,
+    clearError,
     addEntry,
     updateEntry,
     deleteEntry,

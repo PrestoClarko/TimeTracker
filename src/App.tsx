@@ -23,8 +23,17 @@ const VIEW_TITLES: Record<View, string> = {
 
 export default function App() {
   const auth = useAuth();
-  const { entries, loading, syncing, source, addEntry, updateEntry, deleteEntry } =
-    useEntries(auth.user);
+  const {
+    entries,
+    loading,
+    syncing,
+    source,
+    error: entriesError,
+    clearError,
+    addEntry,
+    updateEntry,
+    deleteEntry,
+  } = useEntries(auth.user);
   const { settings, update } = useSettings();
   const timer = useTimer();
 
@@ -113,6 +122,18 @@ export default function App() {
             {auth.error && (
               <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                 {auth.error}
+              </div>
+            )}
+
+            {entriesError && (
+              <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                <span>{entriesError}</span>
+                <button
+                  onClick={clearError}
+                  className="shrink-0 rounded-md px-2 py-0.5 text-rose-300 hover:bg-rose-500/20"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 
