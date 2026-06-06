@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Lock the database down so every user can only read and write their OWN
+// time entries. Paste these into Firebase Console → Firestore → Rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/entries/{entryId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
